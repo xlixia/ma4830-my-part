@@ -22,9 +22,9 @@ offset range: -1 - 1
 output types: 0=DAC, 1=terminal, 2=audio, 3=file, 4=multi
 
 
-can call function to save configuration settings
+can call function save_config_file to save configuration settings
 
-can call function to load configuration settings from file (ex. basic_confid.dat)
+can call function load_config_file to load configuration settings from file (ex. basic_config.dat)
 
 ==================================================
 
