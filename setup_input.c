@@ -62,7 +62,6 @@ setup_t* parse_command_line(int argc, char *argv[]) {
     if (argc > 4)
         setup->waveform.offset = atof(argv[4]);
     
-    // FIX #4: Added bounds checking
     if (argc > 5 && strcmp(setup->waveform.waveform_type, "arb") == 0) {
         strncpy(setup->waveform.arbitrary_file, argv[5], 255);
         setup->waveform.arbitrary_file[255] = '\0';
