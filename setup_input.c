@@ -236,12 +236,6 @@ void print_setup_summary(const setup_t *setup) {
     } else {
         printf("Duration:    INFINITE\n");
     }
-    
-    printf("\nSetup Status: %s\n", setup->is_valid ? "VALID" : "INVALID");
-    if (!setup->is_valid) {
-        printf("Error: %s\n", setup->error_message);
-    }
-    printf("\n");
 }
 
 void free_setup(setup_t *setup) {
@@ -452,21 +446,6 @@ void keyboard_input_loop(setup_t *setup) {
             } else {
                 printf("\nNo saved configuration found\n");
             }
-        }
-        else if (key == '?') {
-            printf("\n");
-            printf("CONTROLS:\n");
-            printf("  ↑/↓     : Increase/Decrease frequency\n");
-            printf("  ←/→     : Change waveform type\n");
-            printf("  +/-     : Increase/Decrease amplitude\n");
-            printf("  [ ]     : Increase/Decrease offset\n");
-            printf("  F/f     : Type frequency\n");
-            printf("  A/a     : Type amplitude\n");
-            printf("  O/o     : Type offset\n");
-            printf("  S/s     : Save configuration\n");
-            printf("  L/l     : Load configuration\n");
-            printf("  Q/q     : Quit\n");
-            printf("\n");
         }
         else if (key == 'q' || key == 'Q') {
             break;
