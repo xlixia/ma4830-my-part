@@ -41,3 +41,25 @@ output default: terminal
 sample rate default: 48000 Hz
 
 duration default: infinite
+
+=================================================
+
+keyboard input guide (while program is running)
+
+left/right keys: change waveform
+
+up/down keys: increase/decrease frequency by 10%
+
++/- : increase/decrease amplitude by 0.05
+
+[/]: increase/decrease offset by 0.05
+
+OR 
+
+type 'F'/'A'/'O' followed by desired frequency/amplitude/offset
+
+type 'S' to save current settings to keyboard_settings.dat
+
+type 'L' to load settings from keyboard_settings.dat
+
+type 'Q' to quit
