@@ -1,13 +1,117 @@
 #include "setup_input.h"
 #include <ctype.h>
 #include <time.h>
+#include <stdlib.h>
 
 int validate_setup(setup_t *setup);
 
-// default values
+// helper function for safe numeric input with retry
+double safe_handling(const char *prompt, double min, double max, double default_val) {
+    char buffer[64];
+    char *endptr;
+    double result;
+    int valid = 0;
+    
+    while (!valid) {
+        printf("%s", prompt);
+        fflush(stdout);
+        
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            printf("Input error. Using default: %.2f\n", default_val);
+            return default_val;
+        }
+        
+        size_t len = strlen(buffer);
+        if (len > 0 && buffer[len-1] == '\n') {
+            buffer[len-1] = '\0';
+        }
+        
+        // check if user just pressed Enter
+        if (strlen(buffer) == 0) {
+            printf("Using current value: %.2f\n", default_val);
+            return default_val;
+        }
+        
+        // strtod() for better error detection
+        result = strtod(buffer, &endptr);
+        
+        // check if conversion failed (no digits read)
+        if (endptr == buffer) {
+            printf("ERROR: Invalid number. Please enter a valid number.\n");
+            continue;
+        }
+        
+        // check for extra characters after number
+        while (*endptr == ' ') endptr++;  // skip spaces
+        if (*endptr != '\0') {
+            printf("ERROR: Extra characters detected: '%s'. Please enter only a number.\n", endptr);
+            continue;
+        }
+        
+        // check range
+        if (result < min || result > max) {
+            printf("ERROR: Value must be between %.2f and %.2f. You entered: %.2f\n", min, max, result);
+            continue;
+        }
+        
+        valid = 1;
+    }
+    
+    return result;
+}
+
+// helper function for safe waveform type input with retry
+void safe_get_waveform_type(setup_t *setup) {
+    char buffer[32];
+    int valid = 0;
+    
+    while (!valid) {
+        printf("Enter waveform type (sine, square, tri, saw, arb): ");
+        fflush(stdout);
+        
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            printf("Input error. Keeping current: %s\n", setup->waveform.waveform_type);
+            return;
+        }
+        
+        // remove newline
+        size_t len = strlen(buffer);
+        if (len > 0 && buffer[len-1] == '\n') {
+            buffer[len-1] = '\0';
+        }
+        
+        // convert to lowercase
+        for (int i = 0; buffer[i]; i++) {
+            buffer[i] = tolower(buffer[i]);
+        }
+        
+        // check against valid types
+        if (strcmp(buffer, "sine") == 0) {
+            strcpy(setup->waveform.waveform_type, "sine");
+            valid = 1;
+        } else if (strcmp(buffer, "square") == 0) {
+            strcpy(setup->waveform.waveform_type, "square");
+            valid = 1;
+        } else if (strcmp(buffer, "tri") == 0) {
+            strcpy(setup->waveform.waveform_type, "tri");
+            valid = 1;
+        } else if (strcmp(buffer, "saw") == 0) {
+            strcpy(setup->waveform.waveform_type, "saw");
+            valid = 1;
+        } else if (strcmp(buffer, "arb") == 0) {
+            strcpy(setup->waveform.waveform_type, "arb");
+            valid = 1;
+        } else {
+            printf("ERROR: Invalid waveform type '%s'. Valid types: sine, square, tri, saw, arb\n", buffer);
+        }
+    }
+}
+
+// Default Values
+
 static void apply_defaults(setup_t *setup) {
     strcpy(setup->waveform.waveform_type, "sine");
-    setup->waveform.frequency = 440.0;
+    setup->waveform.frequency = 5.0;
     setup->waveform.amplitude = 1.0;
     setup->waveform.offset = 0.0;
     strcpy(setup->waveform.arbitrary_file, "wave.txt");
@@ -31,14 +135,14 @@ setup_t* parse_command_line(int argc, char *argv[]) {
     if (!setup) return NULL;
     
     apply_defaults(setup); 
-     
+    
+    // helper function for safe command line parsing
     if (argc > 1) {
         char *type = argv[1];
         
         for(int i = 0; type[i]; i++) {
             type[i] = tolower(type[i]);
         }
-        
         if (strcmp(type, "sine") == 0)
             strcpy(setup->waveform.waveform_type, "sine");
         else if (strcmp(type, "square") == 0)
@@ -49,28 +153,128 @@ setup_t* parse_command_line(int argc, char *argv[]) {
             strcpy(setup->waveform.waveform_type, "saw");
         else if (strcmp(type, "arb") == 0)
             strcpy(setup->waveform.waveform_type, "arb");
-        else
-            setup->waveform.frequency = atof(type);
+        else {
+            char *endptr;
+            double freq = strtod(type, &endptr);
+            if (endptr != type && *endptr == '\0') {
+                setup->waveform.frequency = freq;
+            } else {
+                printf("Warning: Unknown argument '%s' ignored\n", type);
+            }
+        }
     }
     
-    if (argc > 2)
-        setup->waveform.frequency = atof(argv[2]);
+    // validate frequency
+    if (argc > 2) {
+        char *endptr;
+        double freq = strtod(argv[2], &endptr);
+        if (endptr != argv[2] && *endptr == '\0') {
+            setup->waveform.frequency = freq;
+        } else {
+            printf("Warning: Invalid frequency '%s', using default %.2f\n", argv[2], setup->waveform.frequency);
+        }
+    }
     
-    if (argc > 3)
-        setup->waveform.amplitude = atof(argv[3]);
+    // validate amplitude
+    if (argc > 3) {
+        char *endptr;
+        double amp = strtod(argv[3], &endptr);
+        if (endptr != argv[3] && *endptr == '\0') {
+            if (amp >= 0 && amp <= 1) {
+                setup->waveform.amplitude = amp;
+            } else {
+                printf("Warning: Amplitude %.2f out of range (0-1), using default %.2f\n", amp, setup->waveform.amplitude);
+            }
+        } else {
+            printf("Warning: Invalid amplitude '%s', using default %.2f\n", argv[3], setup->waveform.amplitude);
+        }
+    }
     
-    if (argc > 4)
-        setup->waveform.offset = atof(argv[4]);
-    
+    // validate offset
+    if (argc > 4) {
+        char *endptr;
+        double off = strtod(argv[4], &endptr);
+        if (endptr != argv[4] && *endptr == '\0') {
+            if (off >= -1 && off <= 1) {
+                setup->waveform.offset = off;
+            } else {
+                printf("Warning: Offset %.2f out of range (-1 to 1), using default %.2f\n", off, setup->waveform.offset);
+            }
+        } else {
+            printf("Warning: Invalid offset '%s', using default %.2f\n", argv[4], setup->waveform.offset);
+        }
+    }
+
+    // validate arb file
     if (argc > 5 && strcmp(setup->waveform.waveform_type, "arb") == 0) {
         strncpy(setup->waveform.arbitrary_file, argv[5], 255);
         setup->waveform.arbitrary_file[255] = '\0';
+    }
+
+    // validate output mode
+    if (argc > 6) {
+        char *mode = argv[6];
+        for(int i = 0; mode[i]; i++) {
+            mode[i] = tolower(mode[i]);
+        }
+        
+        if (strcmp(mode, "dac") == 0)
+            setup->output.output_mode = 0;
+        else if (strcmp(mode, "terminal") == 0)
+            setup->output.output_mode = 1;
+        else if (strcmp(mode, "audio") == 0)
+            setup->output.output_mode = 2;
+        else if (strcmp(mode, "file") == 0)
+            setup->output.output_mode = 3;
+        else if (strcmp(mode, "multi") == 0)
+            setup->output.output_mode = 4;
+        else {
+            printf("Warning: Unknown output mode '%s', using terminal\n", mode);
+        }
+    }
+    
+    // validate sample rate
+    if (argc > 7) {
+        char *endptr;
+        long rate = strtol(argv[7], &endptr, 10);
+        if (endptr != argv[7] && *endptr == '\0') {
+            if (rate >= 1000 && rate <= 192000) {
+                setup->output.sample_rate = (int)rate;
+            } else {
+                printf("Warning: Sample rate %ld out of range (1000-192000), using %d\n", 
+                       rate, setup->output.sample_rate);
+            }
+        } else {
+            printf("Warning: Invalid sample rate '%s', using %d\n", argv[7], setup->output.sample_rate);
+        }
+    }
+    
+    // validate output duration
+    if (argc > 8) {
+        char *endptr;
+        long dur = strtol(argv[8], &endptr, 10);
+        if (endptr != argv[8] && *endptr == '\0') {
+            if (dur >= 0) {
+                setup->output.duration_seconds = (int)dur;
+            } else {
+                printf("Warning: Duration cannot be negative, using %d\n", setup->output.duration_seconds);
+            }
+        } else {
+            printf("Warning: Invalid duration '%s', using %d\n", argv[8], setup->output.duration_seconds);
+        }
+    }
+    
+    // validate output file
+    if (argc > 9) {
+        strncpy(setup->output.output_file, argv[9], 255);
+        setup->output.output_file[255] = '\0';
     }
     
     validate_setup(setup);
     
     return setup;
 }
+
 
 // configuration file input
 setup_t* load_config_file(const char *filename) {
@@ -104,11 +308,23 @@ setup_t* load_config_file(const char *filename) {
                 strncpy(setup->waveform.waveform_type, value, 31);
                 setup->waveform.waveform_type[31] = '\0';
             } else if (strcmp(k, "frequency") == 0) {
-                setup->waveform.frequency = atof(value);
+                char *endptr;
+                double freq = strtod(value, &endptr);
+                if (endptr != value) {
+                    setup->waveform.frequency = freq;
+                }
             } else if (strcmp(k, "amplitude") == 0) {
-                setup->waveform.amplitude = atof(value);
+                char *endptr;
+                double amp = strtod(value, &endptr);
+                if (endptr != value) {
+                    setup->waveform.amplitude = amp;
+                }
             } else if (strcmp(k, "offset") == 0) {
-                setup->waveform.offset = atof(value);
+                char *endptr;
+                double off = strtod(value, &endptr);
+                if (endptr != value) {
+                    setup->waveform.offset = off;
+                }
             } else if (strcmp(k, "arbitrary_file") == 0) {
                 strncpy(setup->waveform.arbitrary_file, value, 255);
                 setup->waveform.arbitrary_file[255] = '\0';
@@ -119,9 +335,17 @@ setup_t* load_config_file(const char *filename) {
                 else if (strcmp(value, "file") == 0) setup->output.output_mode = 3;
                 else if (strcmp(value, "multi") == 0) setup->output.output_mode = 4;
             } else if (strcmp(k, "sample_rate") == 0) {
-                setup->output.sample_rate = atoi(value);
+                char *endptr;
+                long rate = strtol(value, &endptr, 10);
+                if (endptr != value) {
+                    setup->output.sample_rate = (int)rate;
+                }
             } else if (strcmp(k, "duration") == 0) {
-                setup->output.duration_seconds = atoi(value);
+                char *endptr;
+                long dur = strtol(value, &endptr, 10);
+                if (endptr != value) {
+                    setup->output.duration_seconds = (int)dur;
+                }
             } else if (strcmp(k, "output_file") == 0) {
                 strncpy(setup->output.output_file, value, 255);
                 setup->output.output_file[255] = '\0';
@@ -186,9 +410,9 @@ int validate_setup(setup_t *setup) {
         fclose(test);
     }
     
-    if (setup->waveform.frequency < 0.01 || setup->waveform.frequency > 20000) {
+    if (setup->waveform.frequency < 0.01 || setup->waveform.frequency > 10) {
         setup->is_valid = 0;
-        sprintf(setup->error_message, "Frequency out of range: %.2f Hz (0.01-20000)", 
+        sprintf(setup->error_message, "Frequency out of range: %.2f Hz (0.01-10)", 
                 setup->waveform.frequency);
         return 0;
     }
@@ -206,11 +430,25 @@ int validate_setup(setup_t *setup) {
                 setup->waveform.offset);
         return 0;
     }
+
+    if (setup->output.sample_rate < 1000 || setup->output.sample_rate > 192000) {
+        setup->is_valid = 0;
+        sprintf(setup->error_message, "Sample rate out of range: %d Hz (1000-192000)", 
+                setup->output.sample_rate);
+        return 0;
+    }
     
+    if (setup->output.duration_seconds < 0) {
+        setup->is_valid = 0;
+        sprintf(setup->error_message, "Duration cannot be negative: %d", 
+                setup->output.duration_seconds);
+        return 0;
+}
     return 1;
 }
 
 // print selected setup configuration summary
+
 void print_setup_summary(const setup_t *setup) {
     if (!setup) return;
     
@@ -236,15 +474,22 @@ void print_setup_summary(const setup_t *setup) {
     } else {
         printf("Duration:    INFINITE\n");
     }
+    printf("Output File: %s\n", setup->output.output_file);
+    
+    printf("\nSetup Status: %s\n", setup->is_valid ? "VALID" : "INVALID");
+    if (!setup->is_valid) {
+        printf("Error: %s\n", setup->error_message);
+    }
+    printf("\n");
 }
-
+    
 void free_setup(setup_t *setup) {
     if (setup) {
         free(setup);
     }
 }
 
-// KEYBOARD INPUT FUNCTIONS 
+// KEYBOARD INPUT FUNCTIONS
 #include <termios.h>
 #include <fcntl.h>
 
@@ -306,10 +551,11 @@ void keyboard_read_arrow(char *key, int *up, int *down, int *left, int *right) {
     }
 }
 
+// keyboard input loop with error handling and retry
 void keyboard_input_loop(setup_t *setup) {
     char key = 0;
     int up = 0, down = 0, left = 0, right = 0;
-       
+        
     keyboard_init();
     
     while (1) {
@@ -317,7 +563,7 @@ void keyboard_input_loop(setup_t *setup) {
         
         if (up) {
             setup->waveform.frequency *= 1.1;
-            if (setup->waveform.frequency > 20000) setup->waveform.frequency = 20000;
+            if (setup->waveform.frequency > 10) setup->waveform.frequency = 10;
             printf("\rFrequency: %.2f Hz     ", setup->waveform.frequency);
             fflush(stdout);
         }
@@ -382,54 +628,38 @@ void keyboard_input_loop(setup_t *setup) {
             fflush(stdout);
         }
         else if (key == 'f' || key == 'F') {
-            printf("\nEnter frequency (Hz, 0.01-20000): ");
-            fflush(stdout);
-            char buffer[32];
-            if (fgets(buffer, sizeof(buffer), stdin)) {
-                double new_freq = atof(buffer);
-                if (new_freq >= 0.01 && new_freq <= 20000) {
-                    setup->waveform.frequency = new_freq;
-                    printf("Frequency set to %.2f Hz\n", setup->waveform.frequency);
-                } else {
-                    printf("Invalid frequency. Using %.2f Hz\n", setup->waveform.frequency);
-                }
-            }
-            printf("\r%s", "                                        ");
-            printf("\r");
+            // temporarily exit raw mode for input
+            keyboard_restore();
+            printf("\n");
+            double new_freq = safe_handling("Enter frequency (Hz, 0.01-10): ", 
+                                               0.01, 10.0, setup->waveform.frequency);
+            setup->waveform.frequency = new_freq;
+            printf("Frequency set to %.2f Hz\n", setup->waveform.frequency);
+            // re-enter raw mode
+            keyboard_init();
+            printf("\rFrequency: %.2f Hz     ", setup->waveform.frequency);
             fflush(stdout);
         }
         else if (key == 'a' || key == 'A') {
-            printf("\nEnter amplitude (0.0-1.0): ");
-            fflush(stdout);
-            char buffer[32];
-            if (fgets(buffer, sizeof(buffer), stdin)) {
-                double new_amp = atof(buffer);
-                if (new_amp >= 0.0 && new_amp <= 1.0) {
-                    setup->waveform.amplitude = new_amp;
-                    printf("Amplitude set to %.2f\n", setup->waveform.amplitude);
-                } else {
-                    printf("Invalid amplitude. Using %.2f\n", setup->waveform.amplitude);
-                }
-            }
-            printf("\r%s", "                                        ");
-            printf("\r");
+            keyboard_restore();
+            printf("\n");
+            double new_amp = safe_handling("Enter amplitude (0.0-1.0): ", 
+                                             0.0, 1.0, setup->waveform.amplitude);
+            setup->waveform.amplitude = new_amp;
+            printf("Amplitude set to %.2f\n", setup->waveform.amplitude);
+            keyboard_init();
+            printf("\rAmplitude: %.2f     ", setup->waveform.amplitude);
             fflush(stdout);
         }
         else if (key == 'o' || key == 'O') {
-            printf("\nEnter offset (-1.0 to 1.0): ");
-            fflush(stdout);
-            char buffer[32];
-            if (fgets(buffer, sizeof(buffer), stdin)) {
-                double new_off = atof(buffer);
-                if (new_off >= -1.0 && new_off <= 1.0) {
-                    setup->waveform.offset = new_off;
-                    printf("Offset set to %.2f\n", setup->waveform.offset);
-                } else {
-                    printf("Invalid offset. Using %.2f\n", setup->waveform.offset);
-                }
-            }
-            printf("\r%s", "                                        ");
-            printf("\r");
+            keyboard_restore();
+            printf("\n");
+            double new_off = safe_handling("Enter offset (-1.0 to 1.0): ", 
+                                             -1.0, 1.0, setup->waveform.offset);
+            setup->waveform.offset = new_off;
+            printf("Offset set to %.2f\n", setup->waveform.offset);
+            keyboard_init();
+            printf("\rOffset: %.2f     ", setup->waveform.offset);
             fflush(stdout);
         }
         else if (key == 's' || key == 'S') {
